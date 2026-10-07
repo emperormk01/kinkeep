@@ -1,0 +1,15 @@
+node_modules/
+kinkeep.db
+kinkeep.db-shm
+kinkeep.db-wal
+.kinkeep.pid
+dist/
+
+node_modules/
+kinkeep.db
+kinkeep.db-*
+.kinkeep.pid
+dist/
+.env
+.env.*
+!.env.example

@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#e8e5dc">
+<title>KinKeep — the family care notebook</title>
+<meta name="description" content="A private, self-hosted care notebook for appointments, medicines, reminders, and the family circle. KinKeep reads the day's plan aloud.">
+<style>
+:root{
+  color-scheme:light dark;
+  --ground:#e8e5dc;
+  --raised:#f2f0e9;
+  --ink:#252923;
+  --ink-2:#4e594d;
+  --ink-3:#606d5d;
+  --rule:#c8c9bb;
+  --rule-strong:#8c9984;
+  --accent:#315b46;
+  --on-accent:#f2f0e9;
+  --warm:#b85e37;
+  --paper-shadow:rgba(37,41,35,.09);
+  --serif:Georgia,"Times New Roman",serif;
+  --sans:system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --margin:22px;
+  --measure:68rem;
+}
+@media(min-width:840px){:root{--margin:54px}}
+*,*::before,*::after{box-sizing:border-box}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--ground);color:var(--ink);font:16px/1.65 var(--sans);-webkit-font-smoothing:antialiased}
+::selection{background:var(--accent);color:var(--on-accent)}
+a{color:inherit}
+code{font: .88em var(--mono);overflow-wrap:anywhere}
+.wrap{width:min(100%,calc(var(--measure) + 2 * var(--margin)));margin-inline:auto;padding-inline:var(--margin)}
+
+.masthead{border-bottom:1px solid var(--rule-strong);padding:17px 0 14px}
+.brandline{display:flex;align-items:baseline;gap:14px}
+.wordmark{font:700 1.55rem/1 var(--serif);letter-spacing:-.04em;text-decoration:none;color:var(--ink)}
+.wordmark span{color:var(--accent)}
+.edition{margin-left:auto;color:var(--ink-3);font:600 .68rem/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;text-align:right}
+.nav{display:flex;gap:clamp(14px,3vw,30px);flex-wrap:wrap;margin-top:14px;font-size:.86rem}
+.nav a{text-decoration:none;color:var(--ink-2);text-underline-offset:4px}
+.nav a:hover,.nav a:focus-visible{text-decoration:underline;color:var(--accent)}
+
+.hero{padding-block:clamp(48px,8vw,94px) 54px;border-bottom:1px solid var(--rule-strong)}
+.hero-grid{display:grid;gap:clamp(38px,6vw,78px);align-items:center}
+@media(min-width:940px){.hero-grid{grid-template-columns:minmax(0,1.02fr) minmax(390px,.98fr)}}
+.eyebrow{margin:0 0 19px;color:var(--accent);font:600 .7rem/1.4 var(--mono);letter-spacing:.14em;text-transform:uppercase}
+h1{max-width:12ch;margin:0;font:400 clamp(2.8rem,6.6vw,5.25rem)/.99 var(--serif);letter-spacing:-.055em}
+h1 em{color:var(--accent);font-weight:400}
+.intro{max-width:43ch;margin:24px 0 0;color:var(--ink-2);font-size:1.06rem}
+.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:27px}
+.button{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:10px 18px;border:1px solid var(--ink-2);border-radius:2px;text-decoration:none;font-weight:620;font-size:.9rem;transition:background-color .16s,color .16s,border-color .16s}
+.button:focus-visible{outline:3px solid var(--warm);outline-offset:3px}
+.button-primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent)}
+.button-primary:hover{background:#264a38;border-color:#264a38}
+.button-secondary:hover{background:var(--raised)}
+
+/* The core content is the product's signature, not a mock dashboard. */
+.bulletin{position:relative;padding:clamp(23px,4vw,35px);background:var(--raised);border:1px solid var(--rule-strong);box-shadow:8px 8px 0 var(--paper-shadow)}
+.bulletin::before{content:"";position:absolute;inset:0 auto 0 0;width:5px;background:var(--accent)}
+.bulletin-head{display:flex;align-items:center;gap:11px;padding-bottom:16px;border-bottom:1px solid var(--rule)}
+.bulletin-glyph{display:grid;place-items:center;width:30px;height:30px;border:1px solid var(--rule-strong);border-radius:50%;color:var(--accent);font:600 .8rem var(--mono)}
+.bulletin-title{font:600 .7rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-2)}
+.bulletin-date{margin-left:auto;color:var(--ink-3);font:500 .72rem var(--mono);text-align:right}
+.dayline{margin:18px 0 21px;font:italic 1.17rem/1.45 var(--serif);color:var(--ink-2)}
+.entries{margin:0;padding:0;list-style:none}
+.entry{display:grid;grid-template-columns:112px minmax(0,1fr);gap:14px;padding:15px 0;border-top:1px solid var(--rule)}
+.entry-label{padding-top:2px;color:var(--ink-3);font:600 .65rem/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase}
+.entry-copy{font:1rem/1.55 var(--serif)}
+.entry-open{color:var(--accent);font-weight:700}
+.bulletin-note{margin:20px 0 0;padding-top:14px;border-top:1px dashed var(--rule-strong);font-size:.78rem;color:var(--ink-3)}
+@media(max-width:500px){.entry{grid-template-columns:1fr;gap:4px}.entry-label{font-size:.63rem}.bulletin{box-shadow:5px 5px 0 var(--paper-shadow)}}
+
+.section{padding-block:clamp(46px,7vw,72px);border-bottom:1px solid var(--rule)}
+.section-head{display:grid;gap:10px;margin-bottom:30px}
+@media(min-width:780px){.section-head{grid-template-columns:minmax(190px,.7fr) minmax(0,1fr);gap:36px;align-items:baseline}}
+h2{margin:0;font:400 clamp(1.9rem,3.5vw,2.65rem)/1.08 var(--serif);letter-spacing:-.035em}
+.section-dek{max-width:54ch;margin:0;color:var(--ink-2);font-size:.96rem}
+
+/* A fold-out notebook: the ruled surface is the design language. */
+.notes{display:grid;grid-template-columns:1fr;gap:0;border-top:2px solid var(--ink)}
+@media(min-width:780px){.notes{grid-template-columns:1fr 1fr;column-gap:46px}}
+.note{display:grid;grid-template-columns:112px minmax(0,1fr);gap:14px;padding:17px 0;border-bottom:1px solid var(--rule)}
+.note dt{color:var(--ink-3);font:600 .67rem/1.5 var(--mono);letter-spacing:.07em;text-transform:uppercase}
+.note dd{margin:0;font-size:.93rem}
+.note small{display:block;margin-top:4px;color:var(--ink-3);font-size:.82rem}
+
+.tools{border-top:2px solid var(--ink)}
+.tool{display:grid;grid-template-columns:minmax(190px, .78fr) minmax(0,1.5fr);gap:6px 26px;align-items:baseline;padding:13px 0;border-bottom:1px solid var(--rule)}
+.tool-name{font:600 .78rem/1.5 var(--mono);color:var(--accent);overflow-wrap:anywhere}
+.tool-copy{color:var(--ink-2);font-size:.91rem}
+.tool.resource .tool-name{color:var(--ink-2)}
+@media(max-width:600px){.tool{grid-template-columns:1fr;gap:2px;padding:12px 0}}
+
+.access{display:grid;gap:28px;align-items:start}
+@media(min-width:850px){.access{grid-template-columns:.8fr 1.2fr;gap:56px}}
+.access-copy p{max-width:45ch;color:var(--ink-2)}
+.callout{padding:25px 27px;background:var(--accent);color:var(--on-accent)}
+.callout h3{margin:0 0 14px;font:600 .7rem var(--mono);letter-spacing:.1em;text-transform:uppercase;color:#dce6d8}
+.callout ul{margin:0;padding-left:20px}
+.callout li{margin:0 0 10px;font-size:.91rem;line-height:1.55}
+.callout li:last-child{margin-bottom:0}
+.callout code{color:#fff0d1}
+.callout .truth{display:block;margin-top:17px;padding-top:13px;border-top:1px solid rgba(242,240,233,.32);font-size:.8rem;color:#e1eadd}
+
+.circle{border-top:2px solid var(--ink)}
+.person{display:grid;grid-template-columns:minmax(100px,.6fr) minmax(110px,.8fr) minmax(0,1.6fr);gap:14px;padding:14px 0;border-bottom:1px solid var(--rule);align-items:baseline}
+.person-name{font:700 1.02rem var(--serif)}
+.person-role{color:var(--ink-3);font:600 .64rem var(--mono);letter-spacing:.06em;text-transform:uppercase}
+.person-note{color:var(--ink-2);font-size:.88rem}
+@media(max-width:600px){.person{grid-template-columns:1fr auto;gap:3px 10px}.person-note{grid-column:1/-1}.person-role{text-align:right}}
+
+.footer{padding:26px 0 42px;color:var(--ink-3);font-size:.79rem}
+.footer-row{display:flex;gap:10px 24px;flex-wrap:wrap;align-items:baseline}
+.footer-row span:last-child{margin-left:auto}
+.footer a{text-underline-offset:3px}
+.footer a:hover{color:var(--accent)}
+:focus-visible{outline-color:var(--warm);outline-offset:3px}
+
+@media(prefers-color-scheme:dark){
+  :root{--ground:#20251f;--raised:#292f28;--ink:#edf0e7;--ink-2:#d0d8cb;--ink-3:#b0bba9;--rule:#465044;--rule-strong:#75836f;--accent:#9fca9e;--on-accent:#1b281f;--warm:#e3a47e;--paper-shadow:rgba(0,0,0,.28)}
+  .button-primary:hover{background:#b4d9b1;border-color:#b4d9b1}
+  .bulletin-glyph{color:var(--accent)}
+  .callout{background:#314737;color:#f0f4eb}
+  .callout h3{color:#d2e9d0}
+  .callout code{color:#fff0cf}
+}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*,*::before,*::after{transition:none!important;animation:none!important}}
+</style>
+</head>
+<body>
+<header class="masthead">
+  <div class="wrap">
+    <div class="brandline">
+      <a class="wordmark" href="#top" aria-label="KinKeep home">Kin<span>Keep</span></a>
+      <span class="edition">A family care notebook<br>Self-hosted · Apache 2.0</span>
+    </div>
+    <nav class="nav" aria-label="On this page">
+      <a href="#briefing">The briefing</a>
+      <a href="#how">How it works</a>
+      <a href="#tools">What it can do</a>
+      <a href="#privacy">Privacy &amp; access</a>
+      <a href="#circle">The family</a>
+    </nav>
+  </div>
+</header>
+<main id="top">
+  <section class="hero" aria-labelledby="hero-title">
+    <div class="wrap hero-grid">
+      <div>
+        <p class="eyebrow">A family care notebook</p>
+        <h1 id="hero-title">The day, kept <em>together.</em></h1>
+        <p class="intro">Appointments, medicines, small reminders, and the notes families need to share. KinKeep puts them in one private place, then turns the plan into words a voice assistant can read aloud.</p>
+        <div class="actions">
+          <a class="button button-primary" href="#briefing">Read a day briefing</a>
+          <a class="button button-secondary" href="#how">How KinKeep works</a>
+        </div>
+      </div>
+      <article class="bulletin" id="briefing" aria-labelledby="briefing-title">
+        <div class="bulletin-head">
+          <span class="bulletin-glyph" aria-hidden="true">K</span>
+          <span class="bulletin-title" id="briefing-title">A day, from the notebook</span>
+          <time class="bulletin-date" datetime="2026-10-05">Monday<br>5 October</time>
+        </div>
+        <p class="dayline">Here's the plan for today.</p>
+        <ul class="entries">
+          <li class="entry"><span class="entry-label">In the diary</span><span class="entry-copy">Community centre lunch at 12:30 pm; Hair appointment at 2 pm with Salon Bella.</span></li>
+          <li class="entry"><span class="entry-label">Still to take</span><span class="entry-copy entry-open">Lisinopril 10 mg due at 8 am; Metformin 500 mg with food due at 8 am and 7 pm; Vitamin D 1000 IU with food due at 12 pm.</span></li>
+          <li class="entry"><span class="entry-label">A reminder</span><span class="entry-copy">Call Dana back about the heating engineer.</span></li>
+        </ul>
+        <p class="bulletin-note">Example household and schedule are synthetic. This is shaped like KinKeep's spoken briefing, with times written for speech.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="section" id="how" aria-labelledby="how-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="how-title">A notebook, not another cloud.</h2>
+        <p class="section-dek">KinKeep is a small program that runs where you choose. It stores the household notebook in a local SQLite file and offers one MCP endpoint for a compatible assistant or app.</p>
+      </div>
+      <dl class="notes">
+        <div class="note"><dt>What it is</dt><dd>A self-hosted Model Context Protocol server<small>12 tools and one briefing resource</small></dd></div>
+        <div class="note"><dt>What it keeps</dt><dd>Appointments, medicines, reminders, family notes<small>SQLite database file under your control</small></dd></div>
+        <div class="note"><dt>How it speaks</dt><dd>Streamable HTTP at <code>POST /mcp</code><small>JSON-RPC 2.0 · MCP 2025-11-25</small></dd></div>
+        <div class="note"><dt>What it needs</dt><dd>Node.js 22 and a supported MCP client<small>TypeScript · official MCP SDK · SQLite</small></dd></div>
+      </dl>
+    </div>
+  </section>
+
+  <section class="section" id="tools" aria-labelledby="tools-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="tools-title">Useful in the small moments.</h2>
+        <p class="section-dek">The family can keep the shared notebook up to date. The person at home can ask what's next without opening a screen or sorting through a long list.</p>
+      </div>
+      <div class="tools">
+        <div class="tool"><span class="tool-name">get_day_briefing</span><span class="tool-copy">Appointments, outstanding doses and open reminders in one spoken summary.</span></div>
+        <div class="tool"><span class="tool-name">list_appointments · add_appointment</span><span class="tool-copy">See what's coming up or put a new visit in the diary.</span></div>
+        <div class="tool"><span class="tool-name">list_medications · log_medication</span><span class="tool-copy">Read the schedule; record a dose only after the person confirms they took it.</span></div>
+        <div class="tool"><span class="tool-name">list_reminders · add_reminder</span><span class="tool-copy">Keep the everyday things from getting lost between calls.</span></div>
+        <div class="tool"><span class="tool-name">who_visited · log_journal</span><span class="tool-copy">Leave a short note about a visit, call or useful observation.</span></div>
+        <div class="tool"><span class="tool-name">who_can_help</span><span class="tool-copy">Keep the care circle's names, roles and phone numbers close.</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" id="privacy" aria-labelledby="privacy-title">
+    <div class="wrap access">
+      <div class="access-copy">
+        <p class="eyebrow">A deliberate boundary</p>
+        <h2 id="privacy-title">Private by design. Not magic.</h2>
+        <p>KinKeep is self-hosted; you choose where its SQLite file lives. Network access still needs careful setup. The server requires separate read and write bearer tokens, and network traffic should use HTTPS.</p>
+        <p>This project is a prototype, not a medical device, and the current credentials are household-wide—not individual family identities.</p>
+      </div>
+      <aside class="callout" aria-label="Current access and integration status">
+        <h3>What is true today</h3>
+        <ul>
+          <li>Read access and write access use different, randomly generated tokens.</li>
+          <li>Sessions, requests and request bodies have configurable resource limits.</li>
+          <li>Origin checks add a browser safeguard; they are not sign-in.</li>
+          <li>Alexa+ account linking is not implemented. A bearer token is not OAuth.</li>
+        </ul>
+        <span class="truth">Use synthetic demo data. Do not put real household health information on an exposed server.</span>
+      </aside>
+    </div>
+  </section>
+
+  <section class="section" id="circle" aria-labelledby="circle-title">
+    <div class="wrap">
+      <div class="section-head">
+        <h2 id="circle-title">One household. Several hands.</h2>
+        <p class="section-dek">The sample notebook is filled with a believable synthetic family, so a demo can show how small bits of information fit together.</p>
+      </div>
+      <div class="circle">
+        <div class="person"><span class="person-name">Margaret</span><span class="person-role">At home</span><span class="person-note">Keeps her diary and records her own blood pressure.</span></div>
+        <div class="person"><span class="person-name">Dana</span><span class="person-role">Daughter</span><span class="person-note">Helps coordinate appointments and follow-ups.</span></div>
+        <div class="person"><span class="person-name">Robert</span><span class="person-role">Son</span><span class="person-note">Calls during the week and visits on Sundays.</span></div>
+        <div class="person"><span class="person-name">Dr. Alvarez</span><span class="person-role">GP</span><span class="person-note">Has a blood pressure review in the diary.</span></div>
+        <div class="person"><span class="person-name">Aisha</span><span class="person-role">Carer</span><span class="person-note">Visits for tea and helps with the weekly shop.</span></div>
+      </div>
+    </div>
+  </section>
+</main>
+<footer class="footer">
+  <div class="wrap footer-row">
+    <span>KinKeep · Apache 2.0 · A self-hosted family care notebook</span>
+    <span><a href="https://github.com/emperormk01/ceraa">Source and project notes</a></span>
+  </div>
+</footer>
+</body>
+</html>
