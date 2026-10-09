@@ -2,14 +2,24 @@ import { timingSafeEqual } from "node:crypto";
 
 const TOKEN_BYTES = 32;
 
-export function isValidBearerAuthorization(header: string | undefined, token: string): boolean {
-  if (!header) return false;
+// Extract the token from an Authorization header. Only the header form is
+// accepted; a token in the query string is never read.
+export function bearerToken(header: string | undefined): string | null {
+  if (!header) return null;
   const match = /^Bearer ([A-Za-z0-9_-]+)$/.exec(header);
-  if (!match) return false;
-  const supplied = Buffer.from(match[1]);
-  const expected = Buffer.from(token);
-  if (supplied.length !== expected.length) return false;
-  return timingSafeEqual(supplied, expected);
+  return match ? match[1] : null;
+}
+
+export function timingSafeStringEqual(a: string, b: string): boolean {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  if (left.length !== right.length) return false;
+  return timingSafeEqual(left, right);
+}
+
+export function isValidBearerAuthorization(header: string | undefined, token: string): boolean {
+  const supplied = bearerToken(header);
+  return supplied !== null && timingSafeStringEqual(supplied, token);
 }
 
 export function validConfiguredToken(token: string | undefined): token is string {

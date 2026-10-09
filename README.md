@@ -20,6 +20,11 @@ Working. Implements the **MCP 2025-11-25 Streamable HTTP transport**, verified e
 real client over HTTP: session negotiation, 12 tools, 1 resource, structured error responses, and
 concurrent sessions.
 
+It also runs its own **OAuth 2.1 authorization server** so a client can link without a shared token:
+RFC 9728 protected-resource metadata, RFC 8414 authorization-server metadata, and an
+authorization-code grant with PKCE (S256), refresh-token rotation, and revocation. There is no
+dynamic client registration; one public client is configured in the environment.
+
 ## Run it
 
 Needs Node 22+.
@@ -45,10 +50,15 @@ Environment variables:
 | `KINKEEP_MAX_BODY_BYTES` | `65536` | Maximum MCP request-body size. |
 | `KINKEEP_MAX_SESSIONS` | `100` | Maximum concurrent sessions. |
 | `KINKEEP_SESSION_TTL_MS` | `1800000` | Inactivity expiry in milliseconds; minimum 60000. |
+| `KINKEEP_OAUTH_CLIENT_ID` | unset | Public client id allowed to start the OAuth flow. Unset means `/oauth/authorize` rejects every client. |
+| `KINKEEP_OAUTH_REDIRECT_URIS` | unset | Comma-separated exact redirect-URI allowlist for that client. |
+| `KINKEEP_ACCESS_TOKEN_TTL_MS` | `3600000` | Issued access-token lifetime in milliseconds. |
+| `KINKEEP_REFRESH_TOKEN_TTL_MS` | `2592000000` | Issued refresh-token lifetime in milliseconds (30 days). |
+| `KINKEEP_AUTH_CODE_TTL_MS` | `60000` | Authorization-code lifetime in milliseconds. |
 
 - `KINKEEP_READ_TOKEN` is required for read access; a separate `KINKEEP_WRITE_TOKEN` is required for writes. Their values must be distinct, random base64url strings of at least 43 characters. Generate each independently with `node -e 'console.log(require("node:crypto").randomBytes(32).toString("base64url"))'`; inject them through a secret manager or process environment, never a checked-in `.env` file.
 
-This repository is a prototype. The OAuth 2.1 authorization-code flow required for Alexa+ account linking is not implemented, so Alexa+ cannot connect to KinKeep through account linking yet. The static read/write bearer tokens are useful for self-hosted MCP clients but do not implement Alexa OAuth. Discovery endpoints intentionally return 404. Before Alexa+ integration, implement and review client registration, authorization, PKCE, token/refresh handling, revocation, and per-user scope enforcement.
+This repository is a prototype. It implements the OAuth 2.1 authorization-code flow with PKCE (S256) needed for account linking, but it has not been through an independent security review, and Alexa+ add-on onboarding sits behind Amazon's Private Preview. Treat account linking as suitable for local testing and demos until you review it for your deployment.
 
 The database is seeded on first run with a realistic **synthetic** household. A fresh database has appointments anchored relative to its first startup; use that fixture for demos, and never place real household data in the repository or sample database.
 
@@ -61,7 +71,30 @@ POST /mcp          JSON-RPC 2.0 over Streamable HTTP
 GET  /mcp          rejected with 405 (no SSE stream is offered)
 ```
 
-The discovery documents and `/oauth/*` flow are not implemented. Do not rely on KinKeep for Alexa+ account linking until a complete authorization flow is implemented and reviewed.
+The MCP endpoint is the only resource path; the authorization-server and discovery routes sit alongside it:
+
+```
+POST /mcp                                      JSON-RPC 2.0 over Streamable HTTP
+GET  /mcp                                      rejected with 405 (no SSE stream is offered)
+
+GET  /.well-known/oauth-protected-resource     RFC 9728 protected-resource metadata
+GET  /.well-known/oauth-authorization-server   RFC 8414 authorization-server metadata
+GET  /oauth/authorize                          consent page
+POST /oauth/authorize                          approval, then redirect with ?code=...&state=...
+POST /oauth/token                              authorization_code (PKCE S256) and refresh_token grants
+POST /oauth/revoke                             RFC 7009 token revocation
+```
+
+### Account linking
+
+Register one public client with `KINKEEP_OAUTH_CLIENT_ID` and `KINKEEP_OAUTH_REDIRECT_URIS`; a client
+that supports MCP's OAuth discovery can then link:
+
+- PKCE is required (`code_challenge_method=S256`), and `resource` must equal `KINKEEP_PUBLIC_ORIGIN` + `/mcp`.
+- The consent page asks for a household credential: `KINKEEP_WRITE_TOKEN` grants read and write, `KINKEEP_READ_TOKEN` grants read only. A read credential downgrades a write request rather than failing it.
+- Issued access tokens drive `/mcp` exactly like the static tokens and carry the same read/write role. Refresh tokens rotate on every use; the spent one is rejected.
+- Authorization codes and issued tokens are stored as SHA-256 hashes in the same SQLite file.
+- Duplicate authorization codes, mismatched PKCE verifiers, a foreign `resource`, unregistered clients and unregistered redirect URIs are all rejected.
 
 ## Security notes
 
@@ -69,8 +102,9 @@ The discovery documents and `/oauth/*` flow are not implemented. Do not rely on 
 - TLS is required when the service is accessed over a network. Terminate HTTPS at a trusted reverse proxy and set `KINKEEP_PUBLIC_ORIGIN` to its public origin.
 - Bodies default to a 64 KiB cap, sessions to 100 concurrent sessions, with a 30-minute inactivity expiry. Configure limits for the deployment.
 - Origin allowlisting is optional browser/DNS-rebinding defense only. It is not authentication.
-- OAuth discovery is intentionally disabled until a real OAuth implementation exists.
-The HTTP integration suite covers credentials, read/write roles, body/session limits, Host/Origin restrictions, and disabled OAuth discovery. It is not an independent penetration test; do not use real care data without deployment-specific review, encrypted backups, and household access controls.
+- OAuth codes and tokens are stored hashed; a database copy does not contain a usable credential.
+- Unauthenticated `/mcp` requests return **401 without a `WWW-Authenticate` header**, matching Amazon's Alexa+ onboarding checklist. A token is only ever read from the `Authorization` header.
+The HTTP integration suite covers credentials, read/write roles, body/session limits, Host/Origin restrictions, OAuth discovery, the PKCE code flow, refresh rotation and revocation. It is not an independent penetration test; do not use real care data without deployment-specific review, encrypted backups, and household access controls.
 
 
 
@@ -126,6 +160,7 @@ The project root also has `dev.sh` (stop-and-restart) for development.
 
 ```
 src/server.ts     HTTP layer, bearer authorization, transport, bounded sessions
+src/oauth.ts      OAuth 2.1 authorization server: discovery, PKCE, tokens
 src/security.ts   bearer-token validation
 src/db.ts         SQLite access, seeding, date parsing, spoken-time formatting
 src/schema.sql    Table definitions

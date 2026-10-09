@@ -5,6 +5,7 @@ import { createServer } from "node:http";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { isValidBearerAuthorization, validConfiguredToken } from "./security.js";
+import { oauthConfig, resolveOAuthAccess, handleOAuthRequest } from "./oauth.js";
 import { KinKeepDb, todayIso, parseFlexibleDate, toIsoTimestamp, speakableTime, speakableDate, dayPreposition } from "./db.js";
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -31,6 +32,15 @@ const db = new KinKeepDb(DB_PATH);
 db.migrate();
 const seeded = db.seedIfEmpty();
 if (seeded) console.log(`[kinkeep] Seeded fresh database at ${DB_PATH}`);
+
+// OAuth issuer and protected resource identity. A real deployment sets
+// KINKEEP_PUBLIC_ORIGIN to the canonical https origin behind its proxy.
+const KINKEEP_ORIGIN = PUBLIC_ORIGIN ?? `http://localhost:${PORT}`;
+const oauth = oauthConfig(KINKEEP_ORIGIN, READ_TOKEN!, WRITE_TOKEN!, MAX_BODY_BYTES);
+if (!PUBLIC_ORIGIN) console.warn(`[kinkeep] KINKEEP_PUBLIC_ORIGIN is unset; OAuth metadata advertises ${KINKEEP_ORIGIN}. Set it to the canonical origin before linking a real client.`);
+if (!oauth.clientId) console.warn("[kinkeep] KINKEEP_OAUTH_CLIENT_ID is unset; /oauth/authorize will reject every client until one is registered.");
+else if (oauth.redirectUris.length === 0) console.warn("[kinkeep] KINKEEP_OAUTH_CLIENT_ID is set but KINKEEP_OAUTH_REDIRECT_URIS is empty; every authorization request will be rejected.");
+else console.log(`[kinkeep] OAuth authorization server at ${oauth.origin}, resource ${oauth.resource}`);
 
 export function buildServer(): McpServer {
   const server = new McpServer({ name: "kinkeep", version: "0.1.0" });
@@ -64,7 +74,7 @@ export function buildServer(): McpServer {
 
 interface SessionEntry { transport: StreamableHTTPServerTransport; lastSeen: number; accessMode: "read" | "write"; }
 const transports = new Map<string, SessionEntry>();
-function pruneSessions(): void { const cutoff = Date.now() - SESSION_TTL_MS; for (const [id, entry] of transports) if (entry.lastSeen < cutoff) { transports.delete(id); void entry.transport.close(); } }
+function pruneSessions(): void { const cutoff = Date.now() - SESSION_TTL_MS; for (const [id, entry] of transports) if (entry.lastSeen < cutoff) { transports.delete(id); void entry.transport.close(); } db.pruneOAuth(Date.now()); }
 const sessionTimer = setInterval(pruneSessions, Math.min(60_000, SESSION_TTL_MS));
 sessionTimer.unref();
 
@@ -72,18 +82,18 @@ const httpServer = createServer(async (req, res) => {
   const base = PUBLIC_ORIGIN ?? `http://localhost:${PORT}`;
   let url: URL;
   try { url = new URL(req.url ?? "/", base); } catch { res.writeHead(400).end(); return; }
-  if (url.pathname === "/.well-known/oauth-protected-resource" || url.pathname === "/.well-known/oauth-authorization-server") { res.writeHead(404, { "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify({ error: "OAuth onboarding is not implemented; authenticated bearer access is configured separately." })); return; }
-  if (url.pathname !== "/mcp") { res.writeHead(404, { "content-type": "application/json" }); res.end(JSON.stringify({ error: "not found" })); return; }
   const requestHost = req.headers.host ?? "";
   const testHost = process.env.KINKEEP_TEST_HOST;
   const allowedHosts = PUBLIC_ORIGIN ? new Set([new URL(PUBLIC_ORIGIN).host, ...(testHost ? [testHost] : [])]) : new Set([`localhost:${PORT}`, `127.0.0.1:${PORT}`]);
   if (!allowedHosts.has(requestHost)) { res.writeHead(403, { "content-type": "application/json" }); res.end(JSON.stringify({ error: "invalid Host header" })); return; }
+  if (await handleOAuthRequest(req, res, url, oauth, db)) return;
+  if (url.pathname !== "/mcp") { res.writeHead(404, { "content-type": "application/json" }); res.end(JSON.stringify({ error: "not found" })); return; }
   const requestOrigin = req.headers.origin;
   if (requestOrigin && ORIGINS && !ORIGINS.includes(requestOrigin)) { res.writeHead(403, { "content-type": "application/json" }); res.end(JSON.stringify({ error: "invalid Origin header" })); return; }
   if (req.method !== "POST") { res.writeHead(405, { "content-type": "application/json" }); res.end(JSON.stringify({ error: "method not allowed" })); return; }
 const authorization = req.headers.authorization;
-  const accessMode = isValidBearerAuthorization(authorization, READ_TOKEN!) ? "read" : isValidBearerAuthorization(authorization, WRITE_TOKEN!) ? "write" : null;
-  if (!accessMode) { res.writeHead(401, { "content-type": "application/json", "www-authenticate": 'Bearer realm="kinkeep"', "cache-control": "no-store" }); res.end(JSON.stringify({ error: "unauthorized" })); return; }
+  const accessMode = isValidBearerAuthorization(authorization, READ_TOKEN!) ? "read" : isValidBearerAuthorization(authorization, WRITE_TOKEN!) ? "write" : resolveOAuthAccess(db, authorization);
+  if (!accessMode) { res.writeHead(401, { "content-type": "application/json", "cache-control": "no-store" }); res.end(JSON.stringify({ error: "unauthorized" })); return; }
   const length = Number(req.headers["content-length"] ?? 0);
   if (Number.isFinite(length) && length > MAX_BODY_BYTES) { res.writeHead(413, { "content-type": "application/json" }); res.end(JSON.stringify({ error: "request body too large" })); req.destroy(); return; }
   let raw = "";

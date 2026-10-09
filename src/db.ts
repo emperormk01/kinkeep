@@ -52,6 +52,29 @@ export interface JournalEntry {
   by: string | null;
 }
 
+export interface OAuthCode {
+  code_hash: string;
+  client_id: string;
+  redirect_uri: string;
+  code_challenge: string;
+  code_challenge_method: string;
+  scope: string;
+  resource: string | null;
+  expires_at: number;
+  used: number;
+}
+
+export interface OAuthToken {
+  token_hash: string;
+  kind: "access" | "refresh";
+  client_id: string;
+  scope: string;
+  resource: string | null;
+  expires_at: number;
+  created_at: number;
+  revoked: number;
+}
+
 export class KinKeepDb {
   private db: Database.Database;
 
@@ -258,6 +281,46 @@ export class KinKeepDb {
     return this.db
       .prepare("SELECT * FROM journal WHERE id = ?")
       .get(info.lastInsertRowid) as JournalEntry;
+  }
+
+  storeAuthCode(code: OAuthCode): void {
+    this.db
+      .prepare(
+        `INSERT INTO oauth_codes (code_hash, client_id, redirect_uri, code_challenge, code_challenge_method, scope, resource, expires_at, used)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`
+      )
+      .run(code.code_hash, code.client_id, code.redirect_uri, code.code_challenge, code.code_challenge_method, code.scope, code.resource, code.expires_at);
+  }
+
+  // Single use: the UPDATE is itself the claim, so two racing exchanges cannot both win.
+  claimAuthCode(codeHash: string, now: number): OAuthCode | null {
+    const row = this.db
+      .prepare("UPDATE oauth_codes SET used = 1 WHERE code_hash = ? AND used = 0 AND expires_at >= ? RETURNING *")
+      .get(codeHash, now) as OAuthCode | undefined;
+    return row ?? null;
+  }
+
+  storeOAuthToken(token: OAuthToken): void {
+    this.db
+      .prepare(
+        `INSERT INTO oauth_tokens (token_hash, kind, client_id, scope, resource, expires_at, created_at, revoked)
+         VALUES (?, ?, ?, ?, ?, ?, ?, 0)`
+      )
+      .run(token.token_hash, token.kind, token.client_id, token.scope, token.resource, token.expires_at, token.created_at);
+  }
+
+  findOAuthToken(tokenHash: string): OAuthToken | null {
+    const row = this.db.prepare("SELECT * FROM oauth_tokens WHERE token_hash = ?").get(tokenHash) as OAuthToken | undefined;
+    return row ?? null;
+  }
+
+  revokeOAuthToken(tokenHash: string): boolean {
+    return this.db.prepare("UPDATE oauth_tokens SET revoked = 1 WHERE token_hash = ? AND revoked = 0").run(tokenHash).changes > 0;
+  }
+
+  pruneOAuth(now: number): void {
+    this.db.prepare("DELETE FROM oauth_codes WHERE expires_at < ?").run(now);
+    this.db.prepare("DELETE FROM oauth_tokens WHERE expires_at < ?").run(now);
   }
 
   close() {

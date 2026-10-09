@@ -52,3 +52,30 @@ CREATE TABLE IF NOT EXISTS journal (
 );
 
 CREATE INDEX IF NOT EXISTS idx_journal_at ON journal(at);
+
+-- OAuth 2.1 authorization server state (authorization-code + PKCE, refresh rotation).
+-- Codes and tokens are stored as SHA-256 hashes; the raw values never touch disk.
+CREATE TABLE IF NOT EXISTS oauth_codes (
+  code_hash TEXT PRIMARY KEY,
+  client_id TEXT NOT NULL,
+  redirect_uri TEXT NOT NULL,
+  code_challenge TEXT NOT NULL,
+  code_challenge_method TEXT NOT NULL DEFAULT 'S256',
+  scope TEXT NOT NULL,
+  resource TEXT,
+  expires_at INTEGER NOT NULL,
+  used INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS oauth_tokens (
+  token_hash TEXT PRIMARY KEY,
+  kind TEXT NOT NULL,
+  client_id TEXT NOT NULL,
+  scope TEXT NOT NULL,
+  resource TEXT,
+  expires_at INTEGER NOT NULL,
+  created_at INTEGER NOT NULL,
+  revoked INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_oauth_tokens_expires ON oauth_tokens(expires_at);

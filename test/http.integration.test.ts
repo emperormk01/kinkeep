@@ -1,6 +1,7 @@
 import test, { after, before } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, type ChildProcess } from "node:child_process";
+import { request as httpRequest } from "node:http";
 import { randomBytes } from "node:crypto";
 import { createServer } from "node:net";
 
@@ -40,6 +41,19 @@ function auth(token = writeToken): HeadersInit {
 
 async function post(body: unknown, token?: string, headers: Record<string, string> = {}): Promise<Response> {
   return fetch(`${base}/mcp`, { method: "POST", headers: { ...(token ? auth(token) as Record<string, string> : { "content-type": "application/json" }), ...headers }, body: typeof body === "string" ? body : JSON.stringify(body) });
+}
+
+// fetch (undici) silently drops a caller-supplied Host header, so the Host
+// allowlist can only be exercised with a raw http request.
+function rawRequest(path: string, host: string, method: "GET" | "POST", body?: unknown): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const request = httpRequest(
+      { hostname: "127.0.0.1", port, path, method, headers: { host, "content-type": "application/json" } },
+      (response) => { response.resume(); resolve(response.statusCode ?? 0); }
+    );
+    request.on("error", reject);
+    request.end(body === undefined ? undefined : JSON.stringify(body));
+  });
 }
 
 function initialize(id: number) {
@@ -126,18 +140,17 @@ const readInit = await fetch(`http://127.0.0.1:${port}/mcp`, { method: "POST", h
 });
 
 test("rejects unexpected Host values for MCP requests", async () => {
-  const response = await fetch(`${base}/mcp`, { method: "POST", headers: { ...auth(writeToken) as Record<string, string>, host: "attacker.example" }, body: JSON.stringify({ jsonrpc: "2.0", id: 7, method: "ping", params: {} }) });
-  assert.equal(response.status, 403);
+  const status = await rawRequest("/mcp", "attacker.example", "POST", { jsonrpc: "2.0", id: 7, method: "ping", params: {} });
+  assert.equal(status, 403);
 });
 
-test("rejects hostile Origin and does not expose OAuth discovery", async () => {
+test("rejects hostile Origin and host-checks OAuth discovery", async () => {
   const badOrigin = await fetch(`http://localhost:${port}/mcp`, { method: "POST", headers: { ...auth(writeToken) as Record<string, string>, origin: "https://attacker.example" }, body: JSON.stringify({ jsonrpc: "2.0", id: 9, method: "ping", params: {} }) });
   assert.equal(badOrigin.status, 403);
-  for (const path of ["/.well-known/oauth-protected-resource", "/.well-known/oauth-authorization-server"]) {
-    const response = await fetch(`${base}${path}`, { headers: { host: "attacker.example" } });
-    assert.equal(response.status, 404);
-    const data = await response.json() as { issuer?: string; resource?: string };
-    assert.equal(data.issuer, undefined);
-    assert.equal(data.resource, undefined);
-  }
+  const prm = await fetch(`${base}/.well-known/oauth-protected-resource`);
+  assert.equal(prm.status, 200);
+  const prmData = await prm.json() as { resource?: string };
+  assert.equal(prmData.resource, "https://canonical.example/mcp");
+  // Discovery is still behind the Host allowlist, so a spoofed Host gets nothing.
+  assert.equal(await rawRequest("/.well-known/oauth-protected-resource", "attacker.example", "GET"), 403);
 });
