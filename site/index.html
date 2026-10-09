@@ -40,9 +40,26 @@ code{font: .88em var(--mono);overflow-wrap:anywhere}
 .wordmark{font:700 1.55rem/1 var(--serif);letter-spacing:-.04em;text-decoration:none;color:var(--ink)}
 .wordmark span{color:var(--accent)}
 .edition{margin-left:auto;color:var(--ink-3);font:600 .68rem/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;text-align:right}
-.nav{display:flex;gap:clamp(14px,3vw,30px);flex-wrap:wrap;margin-top:14px;font-size:.86rem}
-.nav a{text-decoration:none;color:var(--ink-2);text-underline-offset:4px}
+.nav-menu{margin-top:14px}
+.nav-toggle{display:flex;align-items:center;gap:10px;width:max-content;min-height:44px;margin:0;padding:8px 14px 8px 12px;border:1px solid var(--rule-strong);border-radius:2px;color:var(--ink-2);font:600 .7rem/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;cursor:pointer;list-style:none}
+.nav-toggle::-webkit-details-marker{display:none}
+.nav-toggle:hover{background:var(--raised);color:var(--accent)}
+.nav-toggle:focus-visible{outline:3px solid var(--warm);outline-offset:3px}
+.nav-toggle::before{content:"";flex:none;width:15px;height:2px;background:currentColor;box-shadow:0 -5px 0 currentColor,0 5px 0 currentColor}
+.nav-menu[open] .nav-toggle{color:var(--accent);border-color:var(--accent)}
+.nav-close{display:none}
+.nav-menu[open] .nav-open{display:none}
+.nav-menu[open] .nav-close{display:inline}
+.nav{display:flex;flex-direction:column;gap:2px;margin-top:12px;padding-top:12px;border-top:1px solid var(--rule);font-size:.95rem}
+.nav a{padding:9px 2px;text-decoration:none;color:var(--ink-2);text-underline-offset:4px}
 .nav a:hover,.nav a:focus-visible{text-decoration:underline;color:var(--accent)}
+@media(min-width:700px){
+.nav-menu{display:contents}
+.nav-menu::details-content{content-visibility:visible;display:contents}
+.nav-toggle{display:none}
+.nav{flex-direction:row;gap:clamp(14px,3vw,30px);flex-wrap:wrap;margin-top:0;padding-top:0;border-top:0;font-size:.86rem}
+.nav a{padding:0}
+}
 
 .hero{padding-block:clamp(48px,8vw,94px) 54px;border-bottom:1px solid var(--rule-strong)}
 .hero-grid{display:grid;gap:clamp(38px,6vw,78px);align-items:center}
@@ -138,13 +155,16 @@ h2{margin:0;font:400 clamp(1.9rem,3.5vw,2.65rem)/1.08 var(--serif);letter-spacin
       <a class="wordmark" href="#top" aria-label="KinKeep home">Kin<span>Keep</span></a>
       <span class="edition">A family care notebook<br>Self-hosted · Apache 2.0</span>
     </div>
-    <nav class="nav" aria-label="On this page">
-      <a href="#briefing">The briefing</a>
-      <a href="#how">How it works</a>
-      <a href="#tools">What it can do</a>
-      <a href="#privacy">Privacy &amp; access</a>
-      <a href="#circle">The family</a>
-    </nav>
+    <details class="nav-menu">
+      <summary class="nav-toggle"><span class="nav-open">Sections</span><span class="nav-close">Close</span></summary>
+      <nav class="nav" aria-label="On this page">
+        <a href="#briefing">The briefing</a>
+        <a href="#how">How it works</a>
+        <a href="#tools">What it can do</a>
+        <a href="#privacy">Privacy &amp; access</a>
+        <a href="#circle">The family</a>
+      </nav>
+    </details>
   </div>
 </header>
 <main id="top">
@@ -222,7 +242,7 @@ h2{margin:0;font:400 clamp(1.9rem,3.5vw,2.65rem)/1.08 var(--serif);letter-spacin
           <li>Read access and write access use different, randomly generated tokens.</li>
           <li>Sessions, requests and request bodies have configurable resource limits.</li>
           <li>Origin checks add a browser safeguard; they are not sign-in.</li>
-          <li>Alexa+ account linking is not implemented. A bearer token is not OAuth.</li>
+          <li>Account linking uses OAuth 2.1 with PKCE (S256). It has not had an independent security review, and Amazon's Alexa+ onboarding is still gated.</li>
         </ul>
         <span class="truth">Use synthetic demo data. Do not put real household health information on an exposed server.</span>
       </aside>
@@ -251,5 +271,11 @@ h2{margin:0;font:400 clamp(1.9rem,3.5vw,2.65rem)/1.08 var(--serif);letter-spacin
     <span><a href="https://github.com/emperormk01/ceraa">Source and project notes</a></span>
   </div>
 </footer>
+<script>
+var menu=document.querySelector(".nav-menu");
+menu.addEventListener("click",function(event){
+  if(event.target.closest("a")){menu.open=false;}
+});
+</script>
 </body>
 </html>
