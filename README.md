@@ -160,11 +160,14 @@ The project root also has `dev.sh` (stop-and-restart) for development.
 
 ```
 src/server.ts     HTTP layer, bearer authorization, transport, bounded sessions
+site/index.html   landing page; deployed as the kinkeep static worker
 src/oauth.ts      OAuth 2.1 authorization server: discovery, PKCE, tokens
 src/security.ts   bearer-token validation
 src/db.ts         SQLite access, seeding, date parsing, spoken-time formatting
 src/schema.sql    Table definitions
 ```
+
+The landing page deploys to Cloudflare separately from the MCP server; see [DEPLOY.md](./DEPLOY.md).
 
 ## License
 
